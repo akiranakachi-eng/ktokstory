@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import Image from "next/image";
 
 interface UploadZoneProps {
@@ -11,7 +11,6 @@ interface UploadZoneProps {
 export default function UploadZone({ onFileSelect, disabled }: UploadZoneProps) {
   const [preview, setPreview] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const processFile = useCallback(
     (file: File) => {
@@ -22,26 +21,30 @@ export default function UploadZone({ onFileSelect, disabled }: UploadZoneProps) 
     [onFileSelect]
   );
 
-  const handleTap = () => {
-    if (!disabled) inputRef.current?.click();
-  };
-
   return (
     <div
-      className={`upload-zone rounded-2xl p-1 relative overflow-hidden ${dragging ? "dragging" : ""} ${disabled ? "opacity-50" : "cursor-pointer"}`}
-      onClick={handleTap}
+      className={`upload-zone rounded-2xl p-1 relative overflow-hidden ${dragging ? "dragging" : ""} ${disabled ? "opacity-50" : ""}`}
       onDrop={disabled ? undefined : (e) => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) processFile(f); }}
       onDragOver={disabled ? undefined : (e) => { e.preventDefault(); setDragging(true); }}
       onDragLeave={() => setDragging(false)}
     >
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/jpeg,image/png,image/webp"
-        style={{ display: "none" }}
-        onChange={(e) => { const f = e.target.files?.[0]; if (f) processFile(f); }}
-        disabled={disabled}
-      />
+      {!disabled && (
+        <input
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) processFile(f); }}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            opacity: 0,
+            cursor: "pointer",
+            zIndex: 10,
+          }}
+        />
+      )}
+
       {preview ? (
         <div className="relative w-full aspect-square max-h-72 rounded-xl overflow-hidden">
           <Image
