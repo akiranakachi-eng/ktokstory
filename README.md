@@ -5,7 +5,7 @@
 ## 機能
 
 - 📸 カメラ撮影 or ファイルアップロード（iPhone/Android対応）
-- 🤖 Meshy AI による画像→3D変換（死角をAIが補完）
+- 🤖 Tripo3D AI による画像→3D変換（死角をAIが補完）
 - 🎮 インタラクティブな3Dモデルプレビュー（回転・ズーム）
 - 📥 STL / OBJ / GLB / FBX ダウンロード
 - 🖨️ 3Dプリント業者（DMM.make, Shapeways等）への入稿ガイド
@@ -24,13 +24,13 @@ npm install
 cp .env.local.example .env.local
 ```
 
-`.env.local` を編集して Meshy AI APIキーを設定：
+`.env.local` を編集して Tripo3D APIキーを設定：
 
 ```
-MESHY_API_KEY=your_meshy_api_key_here
+TRIPO_API_KEY=your_tripo_api_key_here
 ```
 
-Meshy AI のAPIキーは https://app.meshy.ai/ から無料で取得できます。
+Tripo3D のAPIキーは https://platform.tripo3d.ai/ から無料で取得できます（登録でクレジット付与）。
 
 ### 3. 開発サーバー起動
 
@@ -45,9 +45,9 @@ http://localhost:3000 にアクセス。
 - **フレームワーク**: Next.js 14 (App Router)
 - **UI**: Tailwind CSS（モバイルファースト）
 - **3Dビューア**: React Three Fiber + Three.js
-- **AI 3D生成**: Meshy AI API（image-to-3D）
+- **AI 3D生成**: Tripo3D API（image-to-3D、無料枚あり）
 - **出力形式**: STL / OBJ / GLB / FBX
 
 ## デプロイ
 
-Vercel へのデプロイが最も簡単です。環境変数 `MESHY_API_KEY` を設定してください。
+Vercel へのデプロイが最も簡単です。環境変数 `TRIPO_API_KEY` を設定してください。
