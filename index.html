@@ -28,8 +28,9 @@
     #error-box { border-radius: 1rem; padding: 16px; border: 1px solid rgba(239,68,68,.3); display: flex; gap: 12px; align-items: flex-start; }
     #canvas-container { border-radius: 1rem; overflow: hidden; height: 320px; position: relative; }
     #canvas-container canvas { display: block; width: 100% !important; height: 100% !important; }
-    .btn { width: 100%; padding: 16px; border-radius: 1rem; background: linear-gradient(135deg,#7c3aed,#2563eb); color: white; font-weight: 700; font-size: 1rem; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: transform .2s,box-shadow .2s; -webkit-appearance: none; }
+    .btn { width: 100%; padding: 16px; border-radius: 1rem; background: linear-gradient(135deg,#7c3aed,#2563eb); color: white; font-weight: 700; font-size: 1rem; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: transform .2s; -webkit-appearance: none; }
     .btn:active { transform: scale(.98); }
+    .btn-ghost { width: 100%; padding: 12px; border-radius: 1rem; background: transparent; color: rgba(255,255,255,.5); font-size: .875rem; border: 1px solid rgba(255,255,255,.12); cursor: pointer; -webkit-appearance: none; }
     .step-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
     .step-card { border-radius: 1rem; padding: 12px; text-align: center; }
     .ilist { list-style: none; display: flex; flex-direction: column; gap: 8px; }
@@ -38,6 +39,8 @@
     .hidden { display: none !important; }
     .dim { color: rgba(255,255,255,.4); font-size: .75rem; }
     .slabel { color: rgba(255,255,255,.7); font-size: .75rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
+    #crop-canvas { display: block; width: 100%; touch-action: none; border-radius: .75rem; cursor: crosshair; }
+    .crop-hint { color: rgba(255,255,255,.45); font-size: .8rem; text-align: center; line-height: 1.5; }
   </style>
 </head>
 <body>
@@ -69,6 +72,21 @@
           <div class="p-overlay"></div>
           <div class="p-label">タップして変更</div>
         </div>
+      </div>
+
+      <!-- Crop UI -->
+      <div id="crop-section" class="hidden stack">
+        <div class="glass" style="border-radius:1rem;overflow:hidden">
+          <canvas id="crop-canvas"></canvas>
+        </div>
+        <p class="crop-hint">コーナー・端をドラッグして３D化する範囲を選択</p>
+        <button class="btn" id="crop-btn">
+          <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/>
+          </svg>
+          この範囲で３D化
+        </button>
+        <button class="btn-ghost" id="crop-reset-btn">全体を選択に戻す</button>
       </div>
 
       <!-- Processing -->
@@ -114,9 +132,9 @@
           <div class="dim" style="line-height:1.3">写真を撒影またはアップロード</div>
         </div>
         <div class="glass step-card">
-          <div style="font-size:1.5rem;margin-bottom:8px">&#x2699;&#xFE0F;</div>
-          <div style="color:white;font-size:.75rem;font-weight:600;margin-bottom:4px">3D変換</div>
-          <div class="dim" style="line-height:1.3">画像から自動で３D化</div>
+          <div style="font-size:1.5rem;margin-bottom:8px">&#x2702;&#xFE0F;</div>
+          <div style="color:white;font-size:.75rem;font-weight:600;margin-bottom:4px">範囲選択</div>
+          <div class="dim" style="line-height:1.3">3D化したい部分を切り抜き</div>
         </div>
         <div class="glass step-card">
           <div style="font-size:1.5rem;margin-bottom:8px">&#x1F5A8;&#xFE0F;</div>
@@ -129,7 +147,6 @@
   </main>
 </div>
 
-<!-- Three.js グローバルビルド（importmap不要・全ブラウザ対応） -->
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 
@@ -149,155 +166,241 @@
   var stepCards       = document.getElementById('step-cards');
   var canvasContainer = document.getElementById('canvas-container');
   var dlBtn           = document.getElementById('dl-btn');
+  var cropSection     = document.getElementById('crop-section');
+  var cropCanvas      = document.getElementById('crop-canvas');
+  var cropBtn         = document.getElementById('crop-btn');
+  var cropResetBtn    = document.getElementById('crop-reset-btn');
 
-  var currentHM = null;
-  var renderer  = null;
-  var animId    = null;
+  var currentHM  = null;
+  var renderer   = null;
+  var animId     = null;
+  var activeBlobUrl = null;
 
   fileInput.addEventListener('change', function (e) {
     var f = e.target.files && e.target.files[0];
     if (f) handleFile(f);
     fileInput.value = '';
   });
-
-  uploadZone.addEventListener('dragover', function (e) { e.preventDefault(); uploadZone.classList.add('drag'); });
-  uploadZone.addEventListener('dragleave', function () { uploadZone.classList.remove('drag'); });
+  uploadZone.addEventListener('dragover',  function (e) { e.preventDefault(); uploadZone.classList.add('drag'); });
+  uploadZone.addEventListener('dragleave', function ()  { uploadZone.classList.remove('drag'); });
   uploadZone.addEventListener('drop', function (e) {
-    e.preventDefault();
-    uploadZone.classList.remove('drag');
-    var f = e.dataTransfer.files[0];
-    if (f) handleFile(f);
+    e.preventDefault(); uploadZone.classList.remove('drag');
+    var f = e.dataTransfer.files[0]; if (f) handleFile(f);
   });
 
   function handleFile(file) {
-    if (!file.type.startsWith('image/')) {
-      showError('画像ファイルを選択してください');
-      return;
-    }
-    var blobUrl = URL.createObjectURL(file);
-    previewImg.src = blobUrl;
+    if (!file.type.startsWith('image/')) { showError('画像ファイルを選択してください'); return; }
+    if (activeBlobUrl) URL.revokeObjectURL(activeBlobUrl);
+    activeBlobUrl = URL.createObjectURL(file);
+    previewImg.src = activeBlobUrl;
     uploadPlaceholder.classList.add('hidden');
     uploadPreview.classList.remove('hidden');
     viewerSection.classList.add('hidden');
     stepCards.classList.add('hidden');
     errorBox.classList.add('hidden');
-    processingEl.classList.remove('hidden');
-    setTimeout(function () {
-      imageToHeightmap(file, 128, function (err, hm) {
-        processingEl.classList.add('hidden');
-        if (err) { showError(err.message || 'エラーが発生しました'); return; }
-        currentHM = hm;
-        viewerSection.classList.remove('hidden');
-        initViewer(hm);
-      });
-    }, 100);
-  }
-
-  function showError(msg) {
-    errorBox.classList.remove('hidden');
-    errorMsg.textContent = msg;
-  }
-
-  function imageToHeightmap(file, res, cb) {
+    processingEl.classList.add('hidden');
+    cropSection.classList.add('hidden');
     var img = new Image();
-    var url = URL.createObjectURL(file);
-    img.onload = function () {
-      URL.revokeObjectURL(url);
-      try {
-        var canvas = document.createElement('canvas');
-        canvas.width = canvas.height = res;
-        var ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, res, res);
-        var px = ctx.getImageData(0, 0, res, res).data;
-        var h = new Float32Array(res * res);
-        for (var i = 0; i < h.length; i++) {
-          h[i] = 0.299*(px[i*4]/255) + 0.587*(px[i*4+1]/255) + 0.114*(px[i*4+2]/255);
-        }
-        cb(null, { data: boxBlur(h, res, res, 2), width: res, height: res });
-      } catch (e) { cb(e); }
-    };
-    img.onerror = function () { URL.revokeObjectURL(url); cb(new Error('画像の読み込みに失敗しました')); };
-    img.src = url;
+    img.onload = function () { showCrop(img); };
+    img.onerror = function () { showError('画像の読み込みに失敗しました'); };
+    img.src = activeBlobUrl;
   }
 
-  function boxBlur(data, w, h, r) {
-    var out = new Float32Array(w * h);
-    for (var y = 0; y < h; y++) {
-      for (var x = 0; x < w; x++) {
-        var s = 0, n = 0;
-        for (var dy = -r; dy <= r; dy++) {
-          for (var dx = -r; dx <= r; dx++) {
-            var nx = x+dx, ny = y+dy;
-            if (nx >= 0 && nx < w && ny >= 0 && ny < h) { s += data[ny*w+nx]; n++; }
-          }
-        }
-        out[y*w+x] = s/n;
+  function showError(msg) { errorBox.classList.remove('hidden'); errorMsg.textContent = msg; }
+
+  var crop = { img:null, ctx:null, cW:0, cH:0, imgRect:null, rect:null };
+
+  function showCrop(img) {
+    crop.img = img;
+    cropSection.classList.remove('hidden');
+    var dpr  = Math.min(window.devicePixelRatio || 1, 2);
+    var maxW = Math.min(cropCanvas.parentElement.clientWidth || 360, 460);
+    var aspect = img.naturalHeight / img.naturalWidth;
+    var maxH = Math.min(maxW * aspect, 420);
+    crop.cW = maxW; crop.cH = maxH;
+    cropCanvas.style.width  = maxW + 'px';
+    cropCanvas.style.height = maxH + 'px';
+    cropCanvas.width  = Math.round(maxW * dpr);
+    cropCanvas.height = Math.round(maxH * dpr);
+    crop.ctx = cropCanvas.getContext('2d');
+    crop.ctx.scale(dpr, dpr);
+    var sx = maxW / img.naturalWidth, sy = maxH / img.naturalHeight, sc = Math.min(sx, sy);
+    var iw = img.naturalWidth * sc, ih = img.naturalHeight * sc;
+    crop.imgRect = { x:(maxW-iw)/2, y:(maxH-ih)/2, w:iw, h:ih };
+    crop.rect = { x1:0, y1:0, x2:img.naturalWidth, y2:img.naturalHeight };
+    drawCrop();
+  }
+
+  function i2c(ix, iy) {
+    var r = crop.imgRect;
+    return { x: r.x + (ix/crop.img.naturalWidth)*r.w, y: r.y + (iy/crop.img.naturalHeight)*r.h };
+  }
+  function c2i(cx, cy) {
+    var r = crop.imgRect, iw = crop.img.naturalWidth, ih = crop.img.naturalHeight;
+    return { x: Math.max(0,Math.min(iw,(cx-r.x)/r.w*iw)), y: Math.max(0,Math.min(ih,(cy-r.y)/r.h*ih)) };
+  }
+
+  function drawCrop() {
+    var ctx=crop.ctx, cW=crop.cW, cH=crop.cH, ir=crop.imgRect, cr=crop.rect;
+    ctx.clearRect(0,0,cW,cH);
+    ctx.drawImage(crop.img, ir.x,ir.y,ir.w,ir.h);
+    var tl=i2c(cr.x1,cr.y1), br=i2c(cr.x2,cr.y2);
+    var rx=tl.x, ry=tl.y, rw=br.x-tl.x, rh=br.y-tl.y;
+    ctx.fillStyle='rgba(0,0,0,0.55)';
+    ctx.fillRect(0,0,cW,ry); ctx.fillRect(0,ry,rx,rh);
+    ctx.fillRect(br.x,ry,cW-br.x,rh); ctx.fillRect(0,br.y,cW,cH-br.y);
+    ctx.strokeStyle='rgba(255,255,255,0.18)'; ctx.lineWidth=0.5;
+    ctx.beginPath();
+    ctx.moveTo(rx+rw/3,ry); ctx.lineTo(rx+rw/3,br.y);
+    ctx.moveTo(rx+2*rw/3,ry); ctx.lineTo(rx+2*rw/3,br.y);
+    ctx.moveTo(rx,ry+rh/3); ctx.lineTo(br.x,ry+rh/3);
+    ctx.moveTo(rx,ry+2*rh/3); ctx.lineTo(br.x,ry+2*rh/3);
+    ctx.stroke();
+    ctx.strokeStyle='rgba(167,139,250,0.9)'; ctx.lineWidth=2;
+    ctx.strokeRect(rx,ry,rw,rh);
+    [[tl.x,tl.y],[br.x,tl.y],[tl.x,br.y],[br.x,br.y]].forEach(function(p){
+      ctx.beginPath(); ctx.arc(p[0],p[1],9,0,Math.PI*2);
+      ctx.fillStyle='#a78bfa'; ctx.fill();
+      ctx.strokeStyle='white'; ctx.lineWidth=2; ctx.stroke();
+    });
+    [[rx+rw/2,ry],[rx+rw/2,br.y],[rx,ry+rh/2],[br.x,ry+rh/2]].forEach(function(p){
+      ctx.beginPath(); ctx.arc(p[0],p[1],6,0,Math.PI*2);
+      ctx.fillStyle='rgba(167,139,250,0.7)'; ctx.fill();
+      ctx.strokeStyle='white'; ctx.lineWidth=1.5; ctx.stroke();
+    });
+  }
+
+  function hitTest(dx,dy) {
+    var cr=crop.rect, tl=i2c(cr.x1,cr.y1), br=i2c(cr.x2,cr.y2);
+    var mx=(tl.x+br.x)/2, my=(tl.y+br.y)/2;
+    var pts=[
+      {name:'tl',x:tl.x,y:tl.y},{name:'tr',x:br.x,y:tl.y},
+      {name:'bl',x:tl.x,y:br.y},{name:'br',x:br.x,y:br.y},
+      {name:'t',x:mx,y:tl.y},{name:'b',x:mx,y:br.y},
+      {name:'l',x:tl.x,y:my},{name:'r',x:br.x,y:my}
+    ];
+    var best=null, bestD=Infinity;
+    pts.forEach(function(h){ var d=Math.hypot(dx-h.x,dy-h.y); if(d<bestD){bestD=d;best=h;} });
+    return bestD<44?best:null;
+  }
+
+  function applyDrag(h,dx,dy) {
+    var ip=c2i(dx,dy), cr=crop.rect, M=20, n=h.name;
+    if(n==='tl'){cr.x1=Math.min(ip.x,cr.x2-M);cr.y1=Math.min(ip.y,cr.y2-M);}
+    if(n==='tr'){cr.x2=Math.max(ip.x,cr.x1+M);cr.y1=Math.min(ip.y,cr.y2-M);}
+    if(n==='bl'){cr.x1=Math.min(ip.x,cr.x2-M);cr.y2=Math.max(ip.y,cr.y1+M);}
+    if(n==='br'){cr.x2=Math.max(ip.x,cr.x1+M);cr.y2=Math.max(ip.y,cr.y1+M);}
+    if(n==='t'){cr.y1=Math.min(ip.y,cr.y2-M);}
+    if(n==='b'){cr.y2=Math.max(ip.y,cr.y1+M);}
+    if(n==='l'){cr.x1=Math.min(ip.x,cr.x2-M);}
+    if(n==='r'){cr.x2=Math.max(ip.x,cr.x1+M);}
+    drawCrop();
+  }
+
+  function getPos(e) {
+    var rect=cropCanvas.getBoundingClientRect();
+    var sx=crop.cW/rect.width, sy=crop.cH/rect.height;
+    if(e.touches&&e.touches.length) return {x:(e.touches[0].clientX-rect.left)*sx,y:(e.touches[0].clientY-rect.top)*sy};
+    return {x:(e.clientX-rect.left)*sx,y:(e.clientY-rect.top)*sy};
+  }
+
+  var aH=null;
+  cropCanvas.addEventListener('mousedown',function(e){var p=getPos(e);aH=hitTest(p.x,p.y);});
+  window.addEventListener('mousemove',function(e){if(!aH)return;var p=getPos(e);applyDrag(aH,p.x,p.y);});
+  window.addEventListener('mouseup',function(){aH=null;});
+  cropCanvas.addEventListener('touchstart',function(e){e.preventDefault();var p=getPos(e);aH=hitTest(p.x,p.y);},{passive:false});
+  window.addEventListener('touchmove',function(e){if(!aH)return;e.preventDefault();var p=getPos(e);applyDrag(aH,p.x,p.y);},{passive:false});
+  window.addEventListener('touchend',function(){aH=null;});
+
+  cropResetBtn.addEventListener('click',function(){
+    if(!crop.img)return;
+    crop.rect={x1:0,y1:0,x2:crop.img.naturalWidth,y2:crop.img.naturalHeight};
+    drawCrop();
+  });
+
+  cropBtn.addEventListener('click',function(){
+    cropSection.classList.add('hidden');
+    viewerSection.classList.add('hidden');
+    errorBox.classList.add('hidden');
+    processingEl.classList.remove('hidden');
+    setTimeout(function(){
+      try{
+        var cr=crop.rect, res=128;
+        var tmp=document.createElement('canvas'); tmp.width=tmp.height=res;
+        var ctx=tmp.getContext('2d');
+        ctx.drawImage(crop.img,cr.x1,cr.y1,cr.x2-cr.x1,cr.y2-cr.y1,0,0,res,res);
+        var px=ctx.getImageData(0,0,res,res).data;
+        var h=new Float32Array(res*res);
+        for(var i=0;i<h.length;i++) h[i]=0.299*(px[i*4]/255)+0.587*(px[i*4+1]/255)+0.114*(px[i*4+2]/255);
+        currentHM={data:boxBlur(h,res,res,2),width:res,height:res};
+        processingEl.classList.add('hidden');
+        viewerSection.classList.remove('hidden');
+        initViewer(currentHM);
+      }catch(e){
+        processingEl.classList.add('hidden');
+        showError(e.message||'3D変換中にエラーが発生しました');
       }
+    },100);
+  });
+
+  function boxBlur(data,w,h,r){
+    var out=new Float32Array(w*h);
+    for(var y=0;y<h;y++) for(var x=0;x<w;x++){
+      var s=0,n=0;
+      for(var dy=-r;dy<=r;dy++) for(var dx=-r;dx<=r;dx++){
+        var nx=x+dx,ny=y+dy;
+        if(nx>=0&&nx<w&&ny>=0&&ny<h){s+=data[ny*w+nx];n++;}
+      }
+      out[y*w+x]=s/n;
     }
     return out;
   }
 
-  function initViewer(hm) {
-    if (renderer) { cancelAnimationFrame(animId); renderer.dispose(); canvasContainer.innerHTML = ''; }
-    var data = hm.data, width = hm.width, height = hm.height;
-    var W = canvasContainer.clientWidth || 360, H = 320;
-    var scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0d0d18);
-    var camera = new THREE.PerspectiveCamera(50, W/H, 0.1, 100);
-    camera.position.set(0, 8, 8);
-    camera.lookAt(0, 0, 0);
-    renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(W, H);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  function initViewer(hm){
+    if(renderer){cancelAnimationFrame(animId);renderer.dispose();canvasContainer.innerHTML='';}
+    var data=hm.data,width=hm.width,height=hm.height;
+    var W=canvasContainer.clientWidth||360,H=320;
+    var scene=new THREE.Scene(); scene.background=new THREE.Color(0x0d0d18);
+    var camera=new THREE.PerspectiveCamera(50,W/H,0.1,100);
+    camera.position.set(0,8,8); camera.lookAt(0,0,0);
+    renderer=new THREE.WebGLRenderer({antialias:true});
+    renderer.setSize(W,H); renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
     canvasContainer.appendChild(renderer.domElement);
-    scene.add(new THREE.AmbientLight(0xffffff, 0.4));
-    var sun = new THREE.DirectionalLight(0xffffff, 1.2);
-    sun.position.set(5, 10, 5);
-    scene.add(sun);
-    var fill = new THREE.DirectionalLight(0x8888ff, 0.4);
-    fill.position.set(-5, 5, -5);
-    scene.add(fill);
-    var geo = new THREE.PlaneGeometry(10, 10, width-1, height-1);
-    var pos = geo.attributes.position.array;
-    for (var i = 0; i < width*height; i++) { pos[i*3+2] = data[i]*3; }
+    scene.add(new THREE.AmbientLight(0xffffff,0.4));
+    var sun=new THREE.DirectionalLight(0xffffff,1.2); sun.position.set(5,10,5); scene.add(sun);
+    var fill=new THREE.DirectionalLight(0x8888ff,0.4); fill.position.set(-5,5,-5); scene.add(fill);
+    var geo=new THREE.PlaneGeometry(10,10,width-1,height-1);
+    var pos=geo.attributes.position.array;
+    for(var i=0;i<width*height;i++) pos[i*3+2]=data[i]*3;
     geo.computeVertexNormals();
-    var mat = new THREE.MeshStandardMaterial({ color: 0xa78bfa, roughness: 0.5, metalness: 0.3, side: THREE.DoubleSide });
-    var mesh = new THREE.Mesh(geo, mat);
-    mesh.rotation.x = -Math.PI/2;
-    scene.add(mesh);
-    var controls = new THREE.OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
-    if (window.ResizeObserver) {
-      new ResizeObserver(function () {
-        var rw = canvasContainer.clientWidth;
-        camera.aspect = rw/H;
-        camera.updateProjectionMatrix();
-        renderer.setSize(rw, H);
-      }).observe(canvasContainer);
-    }
-    (function loop() { animId = requestAnimationFrame(loop); controls.update(); renderer.render(scene, camera); })();
+    var mat=new THREE.MeshStandardMaterial({color:0xa78bfa,roughness:0.5,metalness:0.3,side:THREE.DoubleSide});
+    var mesh=new THREE.Mesh(geo,mat); mesh.rotation.x=-Math.PI/2; scene.add(mesh);
+    var controls=new THREE.OrbitControls(camera,renderer.domElement);
+    controls.enableDamping=true; controls.dampingFactor=0.05;
+    if(window.ResizeObserver) new ResizeObserver(function(){
+      var rw=canvasContainer.clientWidth;
+      camera.aspect=rw/H; camera.updateProjectionMatrix(); renderer.setSize(rw,H);
+    }).observe(canvasContainer);
+    (function loop(){animId=requestAnimationFrame(loop);controls.update();renderer.render(scene,camera);})();
   }
 
-  dlBtn.addEventListener('click', function () {
-    if (!currentHM) return;
-    var blob = buildSTL(currentHM.data, currentHM.width, currentHM.height);
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    a.href = url; a.download = 'model.stl';
+  dlBtn.addEventListener('click',function(){
+    if(!currentHM)return;
+    var blob=buildSTL(currentHM.data,currentHM.width,currentHM.height);
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a'); a.href=url; a.download='model.stl';
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
   });
 
-  function buildSTL(data, width, height) {
-    var S=100, MH=20, B=3, w=width, h=height;
-    var total = (w-1)*(h-1)*4 + ((h-1)*4+(w-1)*4);
-    var buf = new ArrayBuffer(84+total*50);
-    var view = new DataView(buf);
-    var HDR = '3D Print Studio Relief';
-    for (var i=0;i<80;i++) view.setUint8(i, i<HDR.length?HDR.charCodeAt(i):0);
-    view.setUint32(80, total, true);
-    var off = 84;
+  function buildSTL(data,width,height){
+    var S=100,MH=20,B=3,w=width,h=height;
+    var total=(w-1)*(h-1)*4+((h-1)*4+(w-1)*4);
+    var buf=new ArrayBuffer(84+total*50); var view=new DataView(buf);
+    var HDR='3D Print Studio Relief';
+    for(var i=0;i<80;i++) view.setUint8(i,i<HDR.length?HDR.charCodeAt(i):0);
+    view.setUint32(80,total,true);
+    var off=84;
     function px(i){return(i/(w-1))*S;}
     function py(j){return(j/(h-1))*S;}
     function pz(i,j){return B+data[j*w+i]*MH;}
@@ -306,15 +409,12 @@
       for(var k=0;k<v.length;k++){view.setFloat32(off,v[k],true);off+=4;}
       view.setUint16(off,0,true);off+=2;
     }
-    for(var j=0;j<h-1;j++){
-      for(var ii=0;ii<w-1;ii++){
-        var x0=px(ii),y0=py(j),z0=pz(ii,j),x1=px(ii+1),y1=py(j),z1=pz(ii+1,j);
-        var x2=px(ii+1),y2=py(j+1),z2=pz(ii+1,j+1),x3=px(ii),y3=py(j+1),z3=pz(ii,j+1);
-        tri(0,0,1,x0,y0,z0,x1,y1,z1,x2,y2,z2);
-        tri(0,0,1,x0,y0,z0,x2,y2,z2,x3,y3,z3);
-        tri(0,0,-1,x0,y0,0,x2,y2,0,x1,y1,0);
-        tri(0,0,-1,x0,y0,0,x3,y3,0,x2,y2,0);
-      }
+    for(var j=0;j<h-1;j++) for(var ii=0;ii<w-1;ii++){
+      var x0=px(ii),y0=py(j),z0=pz(ii,j),x1=px(ii+1),y1=py(j),z1=pz(ii+1,j);
+      var x2=px(ii+1),y2=py(j+1),z2=pz(ii+1,j+1),x3=px(ii),y3=py(j+1),z3=pz(ii,j+1);
+      tri(0,0,1,x0,y0,z0,x1,y1,z1,x2,y2,z2); tri(0,0,1,x0,y0,z0,x2,y2,z2,x3,y3,z3);
+      tri(0,0,-1,x0,y0,0,x2,y2,0,x1,y1,0); tri(0,0,-1,x0,y0,0,x3,y3,0,x2,y2,0);
+      void z1; void z3;
     }
     for(var j=0;j<h-1;j++){
       tri(-1,0,0,0,py(j),pz(0,j),0,py(j+1),pz(0,j+1),0,py(j+1),0);
