@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import Image from "next/image";
 
 interface UploadZoneProps {
   onFileSelect: (file: File) => void;
@@ -47,12 +46,11 @@ export default function UploadZone({ onFileSelect, disabled }: UploadZoneProps) 
 
       {preview ? (
         <div className="relative w-full aspect-square max-h-72 rounded-xl overflow-hidden">
-          <Image
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
             src={preview}
             alt="アップロード画像"
-            fill
-            className="object-contain"
-            sizes="(max-width: 768px) 100vw, 50vw"
+            className="w-full h-full object-contain"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
           <div className="absolute bottom-3 left-3 text-xs text-white/70">タップして変更</div>
