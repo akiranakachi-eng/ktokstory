@@ -24,7 +24,7 @@
   html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
     font-family:Inter,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;
     overscroll-behavior:none;}
-  body{display:flex;flex-direction:column;min-height:100dvh;}
+  body{display:flex;flex-direction:column;height:100dvh;overflow:hidden;}
 
   /* ---- ヘッダ ---- */
   header{display:flex;align-items:center;justify-content:space-between;
@@ -60,7 +60,7 @@
     background:rgba(8,12,10,.5);border:1px solid var(--line);border-radius:999px;
     overflow:hidden;display:flex;flex-direction:column-reverse;}
   .gauge .fill{width:100%;background:linear-gradient(180deg,var(--impact),#5fae1e);
-    height:0%;transition:height .06s linear;}
+    height:0%;transition:height .18s cubic-bezier(0.22,1,0.36,1);}
   .gauge .mark{position:absolute;left:-5px;right:-5px;height:2px;background:var(--armed);
     box-shadow:0 0 6px var(--armed);}
   .gauge.empty{display:none;}
@@ -106,7 +106,8 @@
   .val{font-family:"JetBrains Mono",monospace;font-size:13px;color:var(--ink);width:26px;text-align:right;}
 
   /* ---- クリップ一覧 ---- */
-  .clips{padding:8px 16px max(18px,env(safe-area-inset-bottom));background:var(--bg);}
+  .clips{padding:8px 16px max(18px,env(safe-area-inset-bottom));background:var(--bg);
+    overflow-y:auto;max-height:38dvh;flex-shrink:0;}
   .clips-head{display:flex;align-items:center;justify-content:space-between;
     padding:10px 2px 12px;}
   .clips-head h2{margin:0;font-size:14px;font-weight:700;letter-spacing:.02em;}
@@ -352,7 +353,7 @@ function loop(){
     motion=Math.min(100, mean*2.4);
   }
   prevData=cur;
-  motionSmooth=motionSmooth*0.55+motion*0.45;
+  motionSmooth=motionSmooth*0.75+motion*0.25;
   els.gaugeFill.style.height=motionSmooth+"%";
 
   // しきい値（感度→低いほど検知しやすい）
