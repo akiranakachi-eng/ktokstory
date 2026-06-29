@@ -141,7 +141,7 @@
     <span class="dot" id="liveDot"></span>
     Swing Clipper
     <small>auto-clip</small>
-    <span class="ver">v1.5</span>
+    <span class="ver">v1.6</span>
   </div>
 </header>
 
@@ -227,7 +227,7 @@ let rafId=null;
 // 解析用
 const aCanvas=document.createElement("canvas"); aCanvas.width=80; aCanvas.height=60;
 const aCtx=aCanvas.getContext("2d",{willReadFrequently:true});
-let prevData=null, motion=0, motionSmooth=0;
+let prevData=null, motion=0, motionSmooth=0, motionPeak=0;
 
 // 録画キャンバス
 const rCanvas=document.createElement("canvas");
@@ -341,18 +341,21 @@ function loop(){
   aCtx.drawImage(els.video,0,0,aCanvas.width,aCanvas.height);
   const cur=aCtx.getImageData(0,0,aCanvas.width,aCanvas.height).data;
   if(prevData){
-    let diff=0; const n=cur.length;
-    for(let i=0;i<n;i+=4){ diff+=Math.abs(cur[i]-prevData[i]); } // R成分だけ
-    const mean=diff/(n/4); // 0..255
-    motion=Math.min(100, mean*2.4);
+    let hot=0; const n=cur.length;
+    for(let i=0;i<n;i+=4){
+      const d=(Math.abs(cur[i]-prevData[i])+Math.abs(cur[i+1]-prevData[i+1])+Math.abs(cur[i+2]-prevData[i+2]))/3;
+      if(d>10) hot++;
+    }
+    motion=Math.min(100, hot/(n/4)*600); // 動いたピクセル割合を増幅
   }
   prevData=cur;
-  motionSmooth=motionSmooth*0.75+motion*0.25;
+  motionSmooth=motionSmooth*0.75+motion*0.25;       // ゲージ表示用（滑らか）
+  motionPeak=Math.max(motionPeak*0.82, motion);      // トリガー用（瞬間ピーク保持）
   els.gaugeFill.style.height=motionSmooth+"%";
 
   // しきい値（感度→低いほど検知しやすい）
   const sens=parseInt(els.sens.value);
-  const thr=70-sens*5.5;  // 1→64.5, 10→15
+  const thr=58-sens*5;  // 1→53, 10→8
   els.gaugeMark.style.bottom=thr+"%";
 
   // 先読みバッファ更新
@@ -366,7 +369,7 @@ function loop(){
   }
 
   // 自動検知
-  if(autoDetect && now>cooldownUntil && motionSmooth>thr){
+  if(autoDetect && now>cooldownUntil && motionPeak>thr){
     captureClip();
   }
 }
@@ -431,7 +434,7 @@ async function captureClip(){
 
   // クールダウン
   cooldownUntil=performance.now()+COOLDOWN_MS;
-  motionSmooth=0; prevData=null;
+  motionSmooth=0; motionPeak=0; prevData=null;
   mode="idle";
   setStatus();
 }
