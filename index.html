@@ -24,7 +24,7 @@
   html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
     font-family:Inter,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;
     overscroll-behavior:none;}
-  body{display:flex;flex-direction:column;height:100dvh;overflow:hidden;}
+  body{display:flex;flex-direction:column;min-height:100dvh;}
 
   /* ---- ヘッダ ---- */
   header{display:flex;align-items:center;justify-content:space-between;
@@ -39,8 +39,9 @@
     border:1px solid var(--line);border-radius:4px;padding:1px 5px;letter-spacing:.04em;}
 
   /* ---- ビューファインダ ---- */
-  .stage{position:relative;flex:0 0 40dvh;background:#000;
+  .stage{position:relative;flex:none;height:52dvh;background:#000;
     display:flex;align-items:center;justify-content:center;overflow:hidden;}
+  @media(orientation:landscape){.stage{height:90dvh;}}
   video{width:100%;height:100%;object-fit:cover;background:#000;display:block;}
   .stage.empty video{display:none;}
   .placeholder{position:absolute;inset:0;display:flex;flex-direction:column;
@@ -73,23 +74,23 @@
   @keyframes flash{0%{opacity:.32}100%{opacity:0}}
 
   /* ---- コントロールバー ---- */
-  .controls{display:flex;flex-direction:column;gap:12px;padding:14px 16px;
-    background:var(--panel);border-top:1px solid var(--line);flex-shrink:0;}
+  .controls{display:flex;flex-direction:column;gap:7px;padding:9px 16px;
+    background:var(--panel);border-top:1px solid var(--line);}
   .row{display:flex;gap:10px;}
   button{font-family:inherit;font-weight:600;border:none;border-radius:var(--radius);
     color:var(--ink);background:var(--panel-2);border:1px solid var(--line);
-    padding:13px 14px;font-size:15px;display:flex;align-items:center;justify-content:center;gap:8px;
+    padding:9px 12px;font-size:14px;display:flex;align-items:center;justify-content:center;gap:7px;
     cursor:pointer;flex:1;transition:transform .08s,background .15s,border-color .15s;}
   button:active{transform:scale(.97);}
   button:disabled{opacity:.4;}
   .btn-primary{background:var(--impact);color:#0c1407;border-color:var(--impact);font-weight:700;flex:2;}
-  .btn-stop{background:transparent;color:var(--danger);border-color:rgba(255,107,94,.45);}
+  .btn-stop{background:transparent;color:var(--danger);border-color:rgba(255,107,94,.45);flex:2;}
   .btn-cap{background:transparent;border-color:var(--line);}
   .icon{width:18px;height:18px;flex:none;}
 
   /* トグル群 */
-  .opts{display:flex;align-items:center;gap:14px;flex-wrap:wrap;
-    padding-top:2px;font-size:13px;color:var(--muted);}
+  .opts{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    padding-top:0;font-size:12px;color:var(--muted);}
   .toggle{display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;}
   .switch{width:40px;height:23px;border-radius:999px;background:var(--panel-2);
     border:1px solid var(--line);position:relative;transition:background .15s;flex:none;}
@@ -108,8 +109,7 @@
   .val{font-family:"JetBrains Mono",monospace;font-size:13px;color:var(--ink);width:26px;text-align:right;}
 
   /* ---- クリップ一覧 ---- */
-  .clips{padding:8px 16px max(18px,env(safe-area-inset-bottom));background:var(--bg);
-    flex:1;min-height:0;overflow-y:auto;}
+  .clips{padding:8px 16px max(18px,env(safe-area-inset-bottom));background:var(--bg);}
   .clips-head{display:flex;align-items:center;justify-content:space-between;
     padding:10px 2px 12px;}
   .clips-head h2{margin:0;font-size:14px;font-weight:700;letter-spacing:.02em;}
@@ -141,7 +141,7 @@
     <span class="dot" id="liveDot"></span>
     Swing Clipper
     <small>auto-clip</small>
-    <span class="ver">v1.3</span>
+    <span class="ver">v1.4</span>
   </div>
 </header>
 
@@ -166,19 +166,12 @@
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
       カメラを開始
     </button>
+    <button class="btn-stop hidden" id="stopBtn">停止</button>
     <button class="btn-cap" id="flipBtn" disabled>
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.5 9a9 9 0 0114.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0020.5 15"/></svg>
       切替
     </button>
   </div>
-  <div class="row">
-    <button class="btn-cap" id="manualBtn" disabled>
-      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5" fill="currentColor" stroke="none"/></svg>
-      今のスイングを切り出す
-    </button>
-    <button class="btn-stop hidden" id="stopBtn">停止</button>
-  </div>
-
   <div class="opts">
     <div class="toggle on" id="autoToggle"><span class="switch"></span><span>自動検知</span></div>
     <div class="slider-wrap">
@@ -186,8 +179,6 @@
       <input type="range" id="sens" min="1" max="10" value="6">
       <span class="val" id="sensVal">6</span>
     </div>
-  </div>
-  <div class="opts">
     <div class="slider-wrap">
       <label>巻き戻し</label>
       <input type="range" id="preroll" min="15" max="38" value="26">
@@ -219,7 +210,7 @@ const MAX_CLIPS = 12;
 const els = {
   stage:$("stage"), video:$("video"), status:$("status"), statusText:$("statusText"), cd:$("cd"),
   gauge:$("gauge"), gaugeFill:$("gaugeFill"), gaugeMark:$("gaugeMark"), flash:$("flash"),
-  startBtn:$("startBtn"), flipBtn:$("flipBtn"), manualBtn:$("manualBtn"), stopBtn:$("stopBtn"),
+  startBtn:$("startBtn"), flipBtn:$("flipBtn"), stopBtn:$("stopBtn"),
   autoToggle:$("autoToggle"), sens:$("sens"), sensVal:$("sensVal"),
   preroll:$("preroll"), prerollVal:$("prerollVal"),
   grid:$("grid"), emptyClips:$("emptyClips"), clipCount:$("clipCount"),
@@ -286,7 +277,7 @@ async function startCamera(){
     els.liveDot.classList.add("live");
     els.startBtn.classList.add("hidden");
     els.stopBtn.classList.remove("hidden");
-    els.flipBtn.disabled=false; els.manualBtn.disabled=false;
+    els.flipBtn.disabled=false;
     setStatus();
     loop();
   }catch(e){
@@ -333,7 +324,7 @@ function stopCamera(){
   els.liveDot.classList.remove("live");
   els.startBtn.classList.remove("hidden");
   els.stopBtn.classList.add("hidden");
-  els.flipBtn.disabled=true; els.manualBtn.disabled=true;
+  els.flipBtn.disabled=true;
   els.startBtn.innerHTML='<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg> カメラを開始';
   setStatus();
 }
@@ -536,7 +527,6 @@ setInterval(()=>{
 els.startBtn.onclick=startCamera;
 els.stopBtn.onclick=stopCamera;
 els.flipBtn.onclick=async()=>{ facing=(facing==="environment")?"user":"environment"; if(running) await startCamera(); };
-els.manualBtn.onclick=()=>{ if(running&&mode==="idle") captureClip(); };
 els.autoToggle.onclick=()=>{ autoDetect=!autoDetect; els.autoToggle.classList.toggle("on",autoDetect); setStatus(); };
 els.sens.oninput=()=>{ els.sensVal.textContent=els.sens.value; };
 els.preroll.oninput=()=>{ els.prerollVal.textContent=(parseInt(els.preroll.value)/10).toFixed(1)+"s"; if(running) setupCanvases(); };
